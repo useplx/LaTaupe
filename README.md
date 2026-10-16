@@ -15,7 +15,7 @@ flowchart TD
     Decision -->|Allow| Upstream[Protected application]
     Decision -->|Observe or block| Store[(SQLite)]
     Decision -->|Block| Deny[HTTP 403]
-    Store --> Evidence[Local source evidence]
+    Store --> Evidence[Local code and curated references]
     Evidence --> Qwen[MyeLiN Qwen3.5]
     RAG[PLeX RAG] --> Qwen
     Qwen --> Report[Technical report]
@@ -24,7 +24,7 @@ flowchart TD
     Controller <--> UI[Private PyWebView interface]
 ```
 
-The XGBoost classifier is the enforcement path. Qwen3.5 never decides whether a request is released: it runs after a mitigation, inspects the untrusted payload and relevant local source excerpts, distinguishes an attempted attack from a confirmed weakness, and stores an auditable report.
+The XGBoost classifier is the enforcement path. Qwen3.5 never decides whether a request is released: it runs after a mitigation, inspects the untrusted payload, relevant local source excerpts and an internal allowlist of manually registered security references, distinguishes an attempted attack from a confirmed weakness, and stores an auditable report. Request data cannot add or replace reference URLs.
 
 The desktop interface does not expose a dashboard API or web server. JavaScript talks directly to the Python controller through the private PyWebView bridge. Closing the window keeps protection in the system tray.
 
@@ -148,50 +148,38 @@ as well. Port and backend changes take effect on the next application start.
 
 ## Controlled SQL injection demo
 
-The lab uses the official [DVWA](https://github.com/digininja/DVWA) image and a
-real MariaDB service. Both images are pinned by digest. MariaDB remains inside
-an isolated Docker network; only DVWA is published on host loopback:
-
-The tested flaw is [CWE-89](https://cwe.mitre.org/data/definitions/89.html).
-It has no CVE because DVWA contains it intentionally as a training target; the
-demo does not mislabel an unrelated product CVE. This validates behavior-based
-SQL-injection detection rather than a CVE-specific signature.
+The isolated lab reproduces
+[CVE-2021-35042](https://www.djangoproject.com/weblog/2021/jul/01/security-releases/),
+an SQL injection in Django `QuerySet.order_by()`. It runs vulnerable Django
+3.2.4, MySQL and a prebuilt SQLMap attacker in containers. Images are pinned by
+digest, the database is private, and setup and attacks are automatic.
 
 ```bash
 cd demo/sql-injection
 docker compose up -d
-./initialize.sh
 ```
 
-Start LaTaupe from the repository root with explicit network configuration:
+Then start LaTaupe directly from Python source at the repository root:
 
 ```bash
+LATAUPE_LISTEN_HOST=0.0.0.0 \
 LATAUPE_UPSTREAM_HTTP=http://127.0.0.1:3000 \
 LATAUPE_PROXY_PORT=8081 \
-LATAUPE_SOURCE_ROOT="$PWD/demo/sql-injection" \
-lataupe
+PYTHONPATH=src python -m app.main
 ```
 
-Scan DVWA directly, without LaTaupe:
+Nuitka is not used in this workflow. Observe the SQLMap attack:
 
 ```bash
-sqlmap -u 'http://127.0.0.1:3000/vulnerabilities/sqli/?id=1&Submit=Submit' \
-  --cookie='security=low' -p id \
-  --batch --level=2 --risk=1 --flush-session
+cd demo/sql-injection
+docker compose logs -f attacker
 ```
 
-Run the identical scan through LaTaupe:
-
-```bash
-sqlmap -u 'http://127.0.0.1:8081/vulnerabilities/sqli/?id=1&Submit=Submit' \
-  --cookie='security=low' -p id \
-  --batch --level=2 --risk=1 --flush-session
-```
-
-The direct scan should identify `id` as injectable. With enforcement enabled,
-the proxied scan should receive `403` responses and fail to exploit DVWA.
-Mitigations appear immediately; Qwen reports remain asynchronous. Detailed
-startup, teardown and network notes live in
+The attacker automatically uses LaTaupe while it is running and falls back to
+the vulnerable service when it is stopped. With enforcement enabled, LaTaupe
+should return `403` before SQLMap reaches Django.
+Mitigations appear immediately; Qwen reports remain asynchronous. SQLMap and
+detailed teardown and network notes live in
 [`demo/sql-injection/README.md`](demo/sql-injection/README.md). Only scan this
 local lab or systems you are explicitly authorized to assess.
 

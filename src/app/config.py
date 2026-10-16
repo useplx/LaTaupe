@@ -61,7 +61,9 @@ def port() -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    listen_host: str = "127.0.0.1"
+    listen_host: str = field(default_factory=lambda: os.getenv(
+        "LATAUPE_LISTEN_HOST", "127.0.0.1"
+    ))
     proxy_port: int = field(default_factory=port)
     upstream_http: str = field(default_factory=lambda: os.getenv(
         "LATAUPE_UPSTREAM_HTTP", "http://127.0.0.1:3000"

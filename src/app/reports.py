@@ -5,8 +5,9 @@ import re
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, cast
 
+from .sources import Sources
 from .store import Store
 
 
@@ -120,6 +121,10 @@ class Reporter:
                 continue
             self.store.report.set(mitigation_id, "analyzing")
             code = self.reader.evidence(str(mitigation["route"]))
+            references = Sources.select(
+                str(mitigation["attack_type"]),
+                cast(dict[str, int | float], mitigation.get("features")),
+            )
             language = self.store.settings.get().get("language", "pt")
             prompt = (
                 f"MITIGACAO\nMetodo: {mitigation['method']}\nRota: {mitigation['route']}\n"
@@ -127,6 +132,11 @@ class Reporter:
                 f"Idioma de resposta: {language}\n"
                 f"Payload nao confiavel:\n<untrusted>{str(mitigation['sample'])[:700]}</untrusted>\n\n"
                 "CODIGO LOCAL\n" + "\n\n".join(f"Arquivo {path}:\n{body}" for path, body in code)
+                + "\n\nREFERENCIAS CURADAS\n"
+                + "\n".join(
+                    f"- {source.title}: {source.url}\n  {source.summary}"
+                    for source in references
+                )
             )
             try:
                 report = self.generator.generate(
@@ -143,7 +153,16 @@ class Reporter:
                 verdict = match.group(1).lower() if match else "possivel-falha"
                 self.store.report.set(
                     mitigation_id, "complete", content=report, verdict=verdict,
-                    sources=[{"path": path, "excerpt": body} for path, body in code],
+                    sources=(
+                        [{"path": path, "excerpt": body} for path, body in code]
+                        + [
+                            {
+                                "path": source.url,
+                                "excerpt": f"{source.title}: {source.summary}",
+                            }
+                            for source in references
+                        ]
+                    ),
                 )
             except Exception as error:  # noqa: BLE001 - runtime failures become report state
                 self.store.report.set(mitigation_id, "failed", error=str(error)[:500])

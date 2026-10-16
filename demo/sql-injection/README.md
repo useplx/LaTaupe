@@ -1,74 +1,61 @@
-# SQL injection lab
+# CVE-2021-35042 lab
 
-This lab runs the official Damn Vulnerable Web Application image and MariaDB.
-DVWA joins a frontend network and a private backend network; MariaDB joins only
-the backend. Only DVWA HTTP is published, on `127.0.0.1:3000`, so neither the
-database nor the vulnerable site is reachable from the LAN.
+This fixture reproduces
+[CVE-2021-35042](https://www.djangoproject.com/weblog/2021/jul/01/security-releases/),
+an SQL injection in `QuerySet.order_by()` affecting Django versions before
+3.2.5 and 3.1.13. User-controlled ordering text could be interpreted as SQL
+when it reached an expected column position.
 
-## Vulnerability identity
+The fixture is adapted from
+[Vulhub](https://github.com/vulhub/vulhub/tree/master/django/CVE-2021-35042).
+It runs Django 3.2.4, MySQL and the official Parrot Security SQLMap image in
+containers. Compose performs the migrations, loads the sample records and
+starts the attack automatically.
 
-| Field | Value |
-|---|---|
-| Product | Damn Vulnerable Web Application (DVWA) |
-| Weakness | CWE-89: SQL injection |
-| CVE | Not applicable: deliberately vulnerable training endpoint |
-| Tested input | GET parameter `id` in `/vulnerabilities/sqli/` |
+## Network
 
-The exercised weakness is
-[CWE-89](https://cwe.mitre.org/data/definitions/89.html), improper
-neutralization of SQL syntax in user-controlled input. DVWA deliberately ships
-this vulnerable implementation for training, so this particular endpoint does
-**not** have a CVE identifier. CVEs identify vulnerabilities in released
-products that were not intended as security exercises; assigning an unrelated
-SQL injection CVE to DVWA would make the demonstration technically false.
+The vulnerable service joins a frontend network and a private backend network.
+MySQL joins only the backend. The only host binding is
+`127.0.0.1:3000`, so neither service is exposed to the LAN.
 
-This distinction is useful when evaluating LaTaupe: the test validates generic
-SQL-injection detection against a deterministic vulnerable service, not a
-signature specifically trained for one CVE. A future CVE regression fixture
-must pin the affected product and version and reproduce that CVE's exact request
-shape separately.
+The SQLMap container checks whether LaTaupe is available on the Docker host. It
+routes the attack through the WAF when port `8081` is listening and attacks the
+fixture directly otherwise. No Python attack script is used.
 
-Start the target and initialize its database:
+## Start
 
 ```bash
 docker compose up -d
 docker compose ps
-./initialize.sh
 ```
 
-DVWA is configured for its official `low` security level with authentication
-disabled so automated scanners do not need a session cookie.
-
-Run SQLMap directly against the vulnerable service:
+Follow the prebuilt SQLMap attacker:
 
 ```bash
-sqlmap -u 'http://127.0.0.1:3000/vulnerabilities/sqli/?id=1&Submit=Submit' \
-  --cookie='security=low' -p id \
-  --batch --level=2 --risk=1 --flush-session
+docker compose logs -f attacker
 ```
 
-From the LaTaupe repository root, start LaTaupe with an explicit upstream and
-proxy address:
+## Run LaTaupe from source
+
+From the LaTaupe repository root:
 
 ```bash
+LATAUPE_LISTEN_HOST=0.0.0.0 \
 LATAUPE_UPSTREAM_HTTP=http://127.0.0.1:3000 \
 LATAUPE_PROXY_PORT=8081 \
-LATAUPE_SOURCE_ROOT="$PWD/demo/sql-injection" \
-lataupe
+PYTHONPATH=src python -m app.main
 ```
 
-Then run the same scan through LaTaupe:
+This runs LaTaupe directly from `src`. Nuitka is not involved.
 
-```bash
-sqlmap -u 'http://127.0.0.1:8081/vulnerabilities/sqli/?id=1&Submit=Submit' \
-  --cookie='security=low' -p id \
-  --batch --level=2 --risk=1 --flush-session
-```
+SQLMap switches to the WAF on its next cycle. Stop LaTaupe to let it switch
+back to the vulnerable service. The log states which path is active.
 
-The direct scan should identify `id` as injectable. With enforcement enabled,
-the proxied scan should receive LaTaupe `403` responses and fail to exploit the
-upstream endpoint. Stop and remove the isolated lab with:
+Stop the isolated environment with:
 
 ```bash
 docker compose down --volumes
 ```
+
+Only run the payload against this local fixture or systems you are explicitly
+authorized to assess.
