@@ -148,44 +148,52 @@ as well. Port and backend changes take effect on the next application start.
 
 ## Controlled SQL injection demo
 
-The isolated demo contains only fictional credentials and binds its vulnerable
-server to loopback:
+The lab uses the official [DVWA](https://github.com/digininja/DVWA) image and a
+real MariaDB service. Both images are pinned by digest. MariaDB remains inside
+an isolated Docker network; only DVWA is published on host loopback:
+
+The tested flaw is [CWE-89](https://cwe.mitre.org/data/definitions/89.html).
+It has no CVE because DVWA contains it intentionally as a training target; the
+demo does not mislabel an unrelated product CVE. This validates behavior-based
+SQL-injection detection rather than a CVE-specific signature.
 
 ```bash
 cd demo/sql-injection
-docker compose up -d --build
+docker compose up -d
+./initialize.sh
 ```
 
-Direct access demonstrates the vulnerability:
+Start LaTaupe from the repository root with explicit network configuration:
 
 ```bash
-curl -G http://127.0.0.1:3000/login \
-  --data-urlencode "username=' OR 1=1 --" \
-  --data-urlencode "password=x"
+LATAUPE_UPSTREAM_HTTP=http://127.0.0.1:3000 \
+LATAUPE_PROXY_PORT=8081 \
+LATAUPE_SOURCE_ROOT="$PWD/demo/sql-injection" \
+lataupe
 ```
 
-Send the same request to the configured LaTaupe proxy port to exercise the WAF:
+Scan DVWA directly, without LaTaupe:
 
 ```bash
-curl -iG http://127.0.0.1:8081/login \
-  --data-urlencode "username=' OR 1=1 --" \
-  --data-urlencode "password=x"
+sqlmap -u 'http://127.0.0.1:3000/vulnerabilities/sqli/?id=1&Submit=Submit' \
+  --cookie='security=low' -p id \
+  --batch --level=2 --risk=1 --flush-session
 ```
 
-The direct request returns all demo rows. The proxied request is expected to
-return `403` before reaching the container. Stop the lab with
-`docker compose down` from the same directory.
-
-## Validate with a controlled target
-
-Only test applications you own or are explicitly authorized to assess. Start a deliberately vulnerable local application on port `3000`, launch LaTaupe, and aim the scanner at the proxy on `8081`. For example, with SQLMap:
+Run the identical scan through LaTaupe:
 
 ```bash
-sqlmap -u 'http://127.0.0.1:8081/items?id=1' \
-  --batch --level=3 --risk=2 --flush-session
+sqlmap -u 'http://127.0.0.1:8081/vulnerabilities/sqli/?id=1&Submit=Submit' \
+  --cookie='security=low' -p id \
+  --batch --level=2 --risk=1 --flush-session
 ```
 
-Compare that controlled run with a direct request to `127.0.0.1:3000`. The direct target demonstrates the vulnerability; the proxied run demonstrates whether LaTaupe blocks the probing sequence. Mitigations and counters appear immediately, while Qwen reports arrive later in **Reports**.
+The direct scan should identify `id` as injectable. With enforcement enabled,
+the proxied scan should receive `403` responses and fail to exploit DVWA.
+Mitigations appear immediately; Qwen reports remain asynchronous. Detailed
+startup, teardown and network notes live in
+[`demo/sql-injection/README.md`](demo/sql-injection/README.md). Only scan this
+local lab or systems you are explicitly authorized to assess.
 
 ## Compile with Nuitka
 

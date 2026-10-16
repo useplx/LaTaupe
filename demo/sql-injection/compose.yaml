@@ -1,12 +1,45 @@
+name: lataupe-sqli-lab
+
 services:
-  vulnerable-login:
-    build: .
+  dvwa:
+    image: ghcr.io/digininja/dvwa@sha256:1af2cedda7617e4d22937e61c98bbf71d8b74b98e46f5e41dd6aa0a5183311b0
+    environment:
+      DB_SERVER: database
+      DEFAULT_SECURITY_LEVEL: low
+      DISABLE_AUTHENTICATION: "true"
+      SQLI_DB: mysql
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
     ports:
-      - "127.0.0.1:3000:3000"
-    read_only: true
-    tmpfs:
-      - /tmp:size=16m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+      - "127.0.0.1:3000:80"
+    restart: unless-stopped
+
+  database:
+    image: mariadb@sha256:7db29378d4fdab73f8123bbc2b48905c90d1a4b00cf848b028f1e81e623257f2
+    environment:
+      MARIADB_ROOT_PASSWORD: dvwa
+      MARIADB_DATABASE: dvwa
+      MARIADB_USER: dvwa
+      MARIADB_PASSWORD: p@ssw0rd
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - backend
+    volumes:
+      - database:/var/lib/mysql
+    restart: unless-stopped
+
+networks:
+  frontend:
+  backend:
+    internal: true
+
+volumes:
+  database:
