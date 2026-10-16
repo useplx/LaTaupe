@@ -3,7 +3,6 @@ from __future__ import annotations
 import nh3
 from markdown_it import MarkdownIt
 
-
 _renderer = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
 _tags = {
     "a", "blockquote", "br", "code", "em", "h1", "h2", "h3", "h4", "hr", "li",

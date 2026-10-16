@@ -5,7 +5,6 @@ import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-
 DATABASE = sqlite3.connect("/tmp/demo.db", check_same_thread=False)
 DATABASE.execute("CREATE TABLE users(username TEXT PRIMARY KEY,password TEXT NOT NULL)")
 DATABASE.executemany(
