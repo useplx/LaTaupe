@@ -1,0 +1,37 @@
+[package]
+name = "lataupe"
+version = "0.1.0"
+description = "XGBoost inference artifact for the LaTaupe WAF"
+
+[entrypoint]
+package = "lataupe"
+
+[dependencies]
+f32 = { git = "https://github.com/useplx/Quantizations.git", version = "v1.0.0", subdir = "F32" }
+
+[policies."lataupe"]
+dtype = "f32"
+
+[policies."lataupe".backend]
+device = "local"
+ordinal = 0
+
+[policies."lataupe".backend.flags]
+iree-hal-target-device = "local,cuda"
+
+[[policies."lataupe".schemes]]
+format = "f32"
+volatile = true
+
+[build.orchestration]
+toolchain = "cpp"
+sources = ["src/entrypoint.cpp", "src/classifier.cpp", "src/model.cpp"]
+
+[build.graph]
+namespace = "lataupe"
+toolchain = "cpp"
+sources = ["src/package.cpp", "src/model.cpp"]
+exports = ["features"]
+
+[capabilities]
+provides = ["web-attack-classifier"]

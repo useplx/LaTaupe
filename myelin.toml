@@ -1,0 +1,13 @@
+[runtime]
+memory = "8GiB"
+scheduler = "static"
+profiling = true
+
+[backend.local]
+device = "local"
+ordinal = 0
+threads = 8
+
+[backend.cuda]
+device = "cuda"
+ordinal = 0

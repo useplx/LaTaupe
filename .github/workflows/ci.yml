@@ -1,0 +1,46 @@
+name: CI
+
+on:
+    push:
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    python:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+                  cache: pip
+            - run: python -m pip install ruff
+            - run: ruff check src demo
+            - run: python -m compileall -q src demo
+
+    package:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/checkout@v4
+              with:
+                  repository: useplx/SYNaPSe
+                  path: SYNaPSe
+            - uses: actions/checkout@v4
+              with:
+                  repository: useplx/MyeLiN
+                  path: MyeLiN
+                  submodules: false
+            - name: Build SYNaPSe
+              run: |
+                  cmake -S SYNaPSe -B synps-build -G Ninja \
+                    -DSYN_BUILD_COMPILER=OFF \
+                    -DSYN_BUILD_TESTS=OFF \
+                    -DMLN_ROOT=${{ github.workspace }}/MyeLiN
+                  cmake --build synps-build --target synps --parallel 8
+            - name: Validate PLeX package
+              working-directory: src/model
+              run: ../../synps-build/synps graph

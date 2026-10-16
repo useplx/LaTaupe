@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "dtype": "float32",
+  "features": [
+    "target_length",
+    "query_length",
+    "body_length",
+    "parameter_count",
+    "decode_depth",
+    "non_alnum_ratio",
+    "digit_ratio",
+    "entropy",
+    "quote_count",
+    "angle_count",
+    "traversal_count",
+    "shell_count",
+    "sql_count",
+    "script_count",
+    "template_count",
+    "null_count",
+    "method_code",
+    "content_type_code"
+  ]
+}
