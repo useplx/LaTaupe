@@ -151,8 +151,8 @@ as well. Port and backend changes take effect on the next application start.
 The isolated lab reproduces
 [CVE-2021-35042](https://www.djangoproject.com/weblog/2021/jul/01/security-releases/),
 an SQL injection in Django `QuerySet.order_by()`. It runs vulnerable Django
-3.2.4, MySQL and a prebuilt SQLMap attacker in containers. Images are pinned by
-digest, the database is private, and setup and attacks are automatic.
+3.2.4 and MySQL in containers. Images are pinned by digest, the database is
+private, and fixture setup is automatic.
 
 ```bash
 cd demo/sql-injection
@@ -162,22 +162,21 @@ docker compose up -d
 Then start LaTaupe directly from Python source at the repository root:
 
 ```bash
-LATAUPE_LISTEN_HOST=0.0.0.0 \
 LATAUPE_UPSTREAM_HTTP=http://127.0.0.1:3000 \
 LATAUPE_PROXY_PORT=8081 \
 PYTHONPATH=src python -m app.main
 ```
 
-Nuitka is not used in this workflow. Observe the SQLMap attack:
+Nuitka is not used in this workflow. In another terminal, attack only the
+LaTaupe endpoint with the installed SQLMap executable:
 
 ```bash
-cd demo/sql-injection
-docker compose logs -f attacker
+sqlmap -u 'http://127.0.0.1:8081/vuln/?order=vuln_collection.name%29%3Bselect%20updatexml%281%2Cconcat%280x7e%2C%28select%20%40%40version%29%29%2C1%29%23' \
+  --batch --dbms=MySQL --level=1 --risk=1 --flush-session
 ```
 
-The attacker automatically uses LaTaupe while it is running and falls back to
-the vulnerable service when it is stopped. With enforcement enabled, LaTaupe
-should return `403` before SQLMap reaches Django.
+With enforcement enabled, LaTaupe should return `403` before SQLMap reaches
+Django. There is no attacker container and no Python attack script.
 Mitigations appear immediately; Qwen reports remain asynchronous. SQLMap and
 detailed teardown and network notes live in
 [`demo/sql-injection/README.md`](demo/sql-injection/README.md). Only scan this
